@@ -366,3 +366,72 @@
         (ok (/ (get total-score rating) (get rating-count rating)))
     )
 )
+
+;; Participant statistics
+(define-map participant-stats
+    { participant: principal }
+    { workshops-attended: uint, workshops-registered: uint, total-feedback: uint }
+)
+
+;; Update participant stats
+;;#[allow(unchecked_data)]
+(define-public (update-participant-stats (participant principal) (attended uint) (registered uint))
+    (let
+        (
+            (current-stats (default-to { workshops-attended: u0, workshops-registered: u0, total-feedback: u0 } (map-get? participant-stats { participant: participant })))
+        )
+        (map-set participant-stats
+            { participant: participant }
+            {
+                workshops-attended: (+ (get workshops-attended current-stats) attended),
+                workshops-registered: (+ (get workshops-registered current-stats) registered),
+                total-feedback: (get total-feedback current-stats)
+            }
+        )
+        (ok true)
+    )
+)
+
+;; Get participant stats
+(define-read-only (get-participant-stats (participant principal))
+    (map-get? participant-stats { participant: participant })
+)
+
+;; Workshop certificates
+(define-map certificates
+    { workshop-id: uint, participant: principal }
+    { issued: bool, issue-date: uint }
+)
+
+;; Issue certificate
+;;#[allow(unchecked_data)]
+(define-public (issue-certificate (workshop-id uint) (participant principal))
+    (let
+        (
+            (workshop (unwrap! (map-get? workshops { workshop-id: workshop-id }) err-not-found))
+            (registration (unwrap! (map-get? participant-registrations { participant: participant, workshop-id: workshop-id }) err-not-found))
+        )
+        (asserts! (is-eq tx-sender (get organizer workshop)) err-owner-only)
+        (asserts! (get attended registration) (err u106))
+        (map-set certificates
+            { workshop-id: workshop-id, participant: participant }
+            { issued: true, issue-date: stacks-block-height }
+        )
+        (ok true)
+    )
+)
+
+;; Get certificate
+(define-read-only (get-certificate (workshop-id uint) (participant principal))
+    (map-get? certificates { workshop-id: workshop-id, participant: participant })
+)
+
+;; Verify certificate
+(define-read-only (verify-certificate (workshop-id uint) (participant principal))
+    (let
+        (
+            (cert (map-get? certificates { workshop-id: workshop-id, participant: participant }))
+        )
+        (ok (is-some cert))
+    )
+)
