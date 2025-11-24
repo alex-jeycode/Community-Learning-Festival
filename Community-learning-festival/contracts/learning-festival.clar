@@ -435,3 +435,41 @@
         (ok (is-some cert))
     )
 )
+
+;; Workshop prerequisites
+(define-map workshop-prerequisites
+    { workshop-id: uint }
+    { required-workshop: uint, min-experience: uint }
+)
+
+;; Set workshop prerequisites
+;;#[allow(unchecked_data)]
+(define-public (set-prerequisites (workshop-id uint) (required-workshop uint) (min-experience uint))
+    (let
+        (
+            (workshop (unwrap! (map-get? workshops { workshop-id: workshop-id }) err-not-found))
+        )
+        (asserts! (is-eq tx-sender (get organizer workshop)) err-owner-only)
+        (map-set workshop-prerequisites
+            { workshop-id: workshop-id }
+            { required-workshop: required-workshop, min-experience: min-experience }
+        )
+        (ok true)
+    )
+)
+
+;; Get prerequisites
+(define-read-only (get-prerequisites (workshop-id uint))
+    (map-get? workshop-prerequisites { workshop-id: workshop-id })
+)
+
+;; Check if participant meets prerequisites
+(define-read-only (meets-prerequisites (workshop-id uint) (participant principal))
+    (let
+        (
+            (prereqs (unwrap! (map-get? workshop-prerequisites { workshop-id: workshop-id }) err-not-found))
+            (stats (default-to { workshops-attended: u0, workshops-registered: u0, total-feedback: u0 } (map-get? participant-stats { participant: participant })))
+        )
+        (ok (>= (get workshops-attended stats) (get min-experience prereqs)))
+    )
+)
