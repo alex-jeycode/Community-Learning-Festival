@@ -271,3 +271,98 @@
         (ok true)
     )
 )
+
+;; Add feedback score
+(define-map workshop-feedback
+    { workshop-id: uint, participant: principal }
+    { score: uint, comment: (string-ascii 200) }
+)
+
+;; Submit workshop feedback
+;;#[allow(unchecked_data)]
+(define-public (submit-feedback (workshop-id uint) (score uint) (comment (string-ascii 200)))
+    (let
+        (
+            (registration (unwrap! (map-get? participant-registrations { participant: tx-sender, workshop-id: workshop-id }) err-not-found))
+        )
+        (asserts! (get attended registration) (err u106))
+        (asserts! (<= score u5) (err u107))
+        (map-set workshop-feedback
+            { workshop-id: workshop-id, participant: tx-sender }
+            { score: score, comment: comment }
+        )
+        (ok true)
+    )
+)
+
+;; Get feedback
+(define-read-only (get-feedback (workshop-id uint) (participant principal))
+    (map-get? workshop-feedback { workshop-id: workshop-id, participant: participant })
+)
+
+;; Workshop tags map
+(define-map workshop-tags
+    { workshop-id: uint }
+    { tag1: (string-ascii 20), tag2: (string-ascii 20), tag3: (string-ascii 20) }
+)
+
+;; Add tags to workshop
+;;#[allow(unchecked_data)]
+(define-public (add-workshop-tags (workshop-id uint) (tag1 (string-ascii 20)) (tag2 (string-ascii 20)) (tag3 (string-ascii 20)))
+    (let
+        (
+            (workshop (unwrap! (map-get? workshops { workshop-id: workshop-id }) err-not-found))
+        )
+        (asserts! (is-eq tx-sender (get organizer workshop)) err-owner-only)
+        (map-set workshop-tags
+            { workshop-id: workshop-id }
+            { tag1: tag1, tag2: tag2, tag3: tag3 }
+        )
+        (ok true)
+    )
+)
+
+;; Get workshop tags
+(define-read-only (get-workshop-tags (workshop-id uint))
+    (map-get? workshop-tags { workshop-id: workshop-id })
+)
+
+;; Workshop ratings aggregation
+(define-map workshop-ratings
+    { workshop-id: uint }
+    { total-score: uint, rating-count: uint }
+)
+
+;; Update workshop rating
+;;#[allow(unchecked_data)]
+(define-public (update-workshop-rating (workshop-id uint) (score uint))
+    (let
+        (
+            (current-rating (default-to { total-score: u0, rating-count: u0 } (map-get? workshop-ratings { workshop-id: workshop-id })))
+        )
+        (asserts! (<= score u5) (err u107))
+        (map-set workshop-ratings
+            { workshop-id: workshop-id }
+            {
+                total-score: (+ (get total-score current-rating) score),
+                rating-count: (+ (get rating-count current-rating) u1)
+            }
+        )
+        (ok true)
+    )
+)
+
+;; Get workshop rating
+(define-read-only (get-workshop-rating (workshop-id uint))
+    (map-get? workshop-ratings { workshop-id: workshop-id })
+)
+
+;; Calculate average rating
+(define-read-only (get-average-rating (workshop-id uint))
+    (let
+        (
+            (rating (unwrap! (map-get? workshop-ratings { workshop-id: workshop-id }) err-not-found))
+        )
+        (ok (/ (get total-score rating) (get rating-count rating)))
+    )
+)
