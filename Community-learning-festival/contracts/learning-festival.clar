@@ -205,3 +205,69 @@
 (define-read-only (get-workshop-count)
     (ok (var-get workshop-counter))
 )
+
+;; Update workshop title
+;;#[allow(unchecked_data)]
+(define-public (update-workshop-title (workshop-id uint) (new-title (string-ascii 100)))
+    (let
+        (
+            (workshop (unwrap! (map-get? workshops { workshop-id: workshop-id }) err-not-found))
+        )
+        (asserts! (is-eq tx-sender (get organizer workshop)) err-owner-only)
+        (map-set workshops
+            { workshop-id: workshop-id }
+            (merge workshop { title: new-title })
+        )
+        (ok true)
+    )
+)
+
+;; Update workshop category
+;;#[allow(unchecked_data)]
+(define-public (update-workshop-category (workshop-id uint) (new-category (string-ascii 30)))
+    (let
+        (
+            (workshop (unwrap! (map-get? workshops { workshop-id: workshop-id }) err-not-found))
+        )
+        (asserts! (is-eq tx-sender (get organizer workshop)) err-owner-only)
+        (map-set workshops
+            { workshop-id: workshop-id }
+            (merge workshop { category: new-category })
+        )
+        (ok true)
+    )
+)
+
+;; Update workshop capacity
+;;#[allow(unchecked_data)]
+(define-public (update-workshop-capacity (workshop-id uint) (new-capacity uint))
+    (let
+        (
+            (workshop (unwrap! (map-get? workshops { workshop-id: workshop-id }) err-not-found))
+        )
+        (asserts! (is-eq tx-sender (get organizer workshop)) err-owner-only)
+        (asserts! (>= new-capacity (get registered workshop)) (err u105))
+        (map-set workshops
+            { workshop-id: workshop-id }
+            (merge workshop { capacity: new-capacity })
+        )
+        (ok true)
+    )
+)
+
+;; Cancel registration
+;;#[allow(unchecked_data)]
+(define-public (cancel-registration (workshop-id uint))
+    (let
+        (
+            (workshop (unwrap! (map-get? workshops { workshop-id: workshop-id }) err-not-found))
+            (registration (unwrap! (map-get? participant-registrations { participant: tx-sender, workshop-id: workshop-id }) err-not-found))
+        )
+        (map-delete participant-registrations { participant: tx-sender, workshop-id: workshop-id })
+        (map-set workshops
+            { workshop-id: workshop-id }
+            (merge workshop { registered: (- (get registered workshop) u1) })
+        )
+        (ok true)
+    )
+)
